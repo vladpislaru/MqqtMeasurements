@@ -1,0 +1,59 @@
+version: '3'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto-mqtt-broker
+    ports:
+      - 1883:1883
+    volumes:
+      - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: always
+    depends_on:
+      - tsdb      
+    networks:
+      - client_mqtt
+
+  adapter:
+    depends_on:
+      - mosquitto
+      - tsdb
+    image: client_adapter
+    env_file:
+      - adapter_client/enviroment_vars.env
+    build: ./adapter_client
+    networks:
+      - client_mqtt
+      - client_tsdb
+
+  tsdb:
+    image: influxdb:1.7
+    container_name: influxdb
+    environment:
+      - INFLUXDB_HTTP_AUTH_ENABLED=false
+      - INFLUXDB_REPORTING_DISABLED=false
+      - INFLUXDB_DB="collector"
+    volumes:
+      - ./volumes/influxdb:/var/lib/influxdb
+    restart: always
+    networks:
+      - client_tsdb
+      - userInterfare_tsdb
+
+  grafana:
+    image: grafana/grafana:8.2.0
+    container_name: grafana
+    ports:
+      - 80:3000
+    depends_on:
+      - tsdb
+    volumes:
+      - ./volumes/grafana-storage:/var/lib/grafana
+      - ./grafana/:/etc/grafana/provisioning
+    networks:
+      - userInterfare_tsdb
+
+networks:
+  client_tsdb: {} # client(adaptor) si tsdb
+  client_mqtt: {} # retea pentru client si broker
+  userInterfare_tsdb: {} # Grafana + tsdb
